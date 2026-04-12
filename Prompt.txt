@@ -1,0 +1,67 @@
+# Master Prompt: AI-Driven Dynamic Restaurant Menu (PostgreSQL Edition)
+
+## Contexto del Proyecto
+Eres un desarrollador Senior Fullstack y experto arquitecto de software. El objetivo es construir un MVP funcional de un sistema de recomendación dinámica para un restaurante. El sistema debe priorizar platos basados en:
+1. Stock Crítico: (Gestionado en PostgreSQL).
+2. Rentabilidad: (Margen de beneficio por plato).
+3. Contexto Externo: (Clima y franja horaria).
+4. Razonamiento de IA: El sistema debe explicar explícitamente por qué recomienda la estrategia de menú actual.
+
+## Requerimientos Técnicos
+- Backend: FastAPI (Python) + Pydantic.
+- Base de Datos: PostgreSQL (usa SQLAlchemy o Tortoise ORM).
+- Frontend: Next.js con Tailwind CSS (App Router).
+- IA: OpenAI API (GPT-4o) utilizando la funcionalidad de "Structured Outputs" nativa para garantizar el formato JSON de respuesta estricto.
+
+## Reglas de Calidad y Seguridad (Developer Skills)
+El agente debe actuar como un Tech Lead estricto y aplicar estas prácticas durante el desarrollo, además tendrá que tener en cuenta los ficheros de skills si es que existen en el proyecto:
+
+1. Seguridad:
+   - Toda credencial (OpenAI, DB) debe ir en un archivo `.env`.
+   - Crea un `.gitignore` robusto que excluya el `.env` y carpetas de entorno virtual/node_modules.
+   - Utiliza estricta validación de datos con Pydantic en todos los endpoints PATCH/POST.
+
+2. Buenas Prácticas Frontend (Next.js):
+   - Usa TypeScript de forma estricta (sin usar `any`).
+   - Arquitectura modular: Crea una carpeta `/components` y divide la UI lógica y visualmente (ej. `DishCard`, `InventoryRow`).
+   - Implementa estados visuales de "Loading" y manejo de errores para las llamadas a la API.
+
+3. Auto-Auditoría:
+   - Antes de dar una tarea por finalizada, debes ejecutar comandos de linting o verificación (ej. revisar que no haya errores de TypeScript) y corregirlos autónomamente.
+
+## Tareas de Implementación (Flujo Estrictamente Secuencial)
+
+**Paso 1: Infraestructura, Base de Datos y Datos Semilla**
+1. Crea la estructura base con una carpeta `/backend` y otra `/frontend`.
+2. Genera un archivo `docker-compose.yml` en la raíz para levantar una instancia de PostgreSQL.
+3. Crea el esquema de base de datos con una tabla `products`: `id` (PK), `name`, `price`, `cost`, `margin` (campo calculado), `stock_level`, `category`, `tags` (array de strings).
+4. Crea un script `seed.py` robusto que pueble la tabla con al menos 15 platos variados (deben tener distintos márgenes, niveles de stock, categorías y tags relevantes como "fresco", "caliente", "vegano").
+
+**Paso 2: Backend API**
+1. Configura FastAPI con conexión a PostgreSQL.
+2. Crea los siguientes endpoints:
+   - `GET /menu`: Debe aceptar parámetros de query opcionales `?weather={clima}&time={hora}`. Devuelve la carta completa, procesada y reordenada por la IA.
+   - `GET /admin/inventory`: Devuelve la lista completa de stock para el dashboard.
+   - `PATCH /admin/inventory/{id}`: Actualiza el stock manualmente (recibe un valor numérico).
+
+**Paso 3: Integración de IA con "Modo Explicación"**
+1. Implementa el servicio de OpenAI en el endpoint `/menu`. Toma los datos del inventario y las variables del contexto (`weather`, `time`).
+2. Llama a GPT-4o obligando al modelo a responder con un esquema Pydantic (Structured Outputs) que contenga estrictamente:
+   - `recommended_ids`: Una lista de enteros (IDs de los platos) ordenados de mayor a menor prioridad.
+   - `ai_reasoning`: Un string explicando la estrategia general adoptada basada en el stock, margen y contexto (ej: "Promocionando sopa por clima lluvioso y exceso de stock en tomate").
+
+**Paso 4: Frontend Dual**
+1. **Panel Admin (`/admin`)**:
+   - Control de inventario: Lista de productos con inputs o botones para modificar el stock rápidamente llamando al endpoint PATCH.
+   - Simulador de Contexto: Selectores (dropdowns) para inyectar manualmente el clima (Soleado, Lluvia, Frío) y la hora (Mañana, Tarde, Noche).
+   - Monitor de IA: Un cuadro de texto destacado que muestre el último `ai_reasoning` generado.
+2. **Interfaz Cliente (`/menu`)**:
+   - Diseño responsivo "Mobile-First" que consuma el endpoint GET `/menu` (enviando los parámetros del simulador si existen).
+   - Debe renderizar los platos en el orden dictado por la IA, destacando visualmente los 3 primeros.
+
+## Instrucciones de Ejecución para el Agente (IMPORTANTE)
+Trabaja paso a paso. No avances al siguiente bloque sin asegurarte de que el anterior funciona.
+1. Configura el entorno, levanta Docker y ejecuta el `seed.py`. Valida que la BD tenga datos.
+2. Implementa el backend completo.
+3. Implementa el frontend.
+Tienes permisos absolutos para crear/modificar archivos, instalar dependencias (`pip install`, `npm install`) y ejecutar comandos en la terminal (`docker-compose up -d`, `uvicorn`, etc.) para entregar el MVP 100% funcional.
