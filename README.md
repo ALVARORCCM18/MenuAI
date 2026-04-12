@@ -70,6 +70,20 @@ npm install
 npm run dev
 ```
 
+## ⚡ Arranque rapido (Windows)
+
+Desde la raiz del proyecto puedes arrancar todo con un solo comando:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-all.ps1
+```
+
+Y detener todos los servicios con:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
+```
+
 ## 🔍 Endpoints disponibles
 
 - `GET /menu?weather={clima}&time={hora}`

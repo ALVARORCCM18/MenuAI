@@ -1,0 +1,2 @@
+.local-postgres/postgresql-binaries.zip filter=lfs diff=lfs merge=lfs -text
+.local-postgres/pgsql/pgsql/pgAdmin[[:space:]]4/runtime/pgAdmin4.exe filter=lfs diff=lfs merge=lfs -text
