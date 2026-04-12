@@ -18,6 +18,7 @@ frontend/.env.local
 
 # Docker
 .docker/
+.local-postgres/
 
 # OS
 .DS_Store
