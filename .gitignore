@@ -12,6 +12,9 @@ node_modules/
 dist/
 .npm
 *.log
+frontend/.next/
+frontend/out/
+frontend/.env.local
 
 # Docker
 .docker/

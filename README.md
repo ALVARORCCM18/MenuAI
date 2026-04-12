@@ -4,55 +4,79 @@ MVP de una aplicación que gestiona menús inteligentes, ofreciendo recomendacio
 
 ## 🚀 Estructura del Proyecto
 
-```
+```text
 MenuIA/
-├── backend/          # API construida con FastAPI y SQLAlchemy
-│   └── database.py   # Configuración de la base de datos y modelos
-├── frontend/         # Interfaz de usuario (En desarrollo)
-├── docker-compose.yml # Configuración de servicios (DB, Backend, etc.)
-└── README.md         # Documentación del proyecto
+├── backend/           # API FastAPI + SQLAlchemy + OpenAI
+├── frontend/          # Next.js App Router con Tailwind CSS
+├── docker-compose.yml # Configuración de PostgreSQL
+├── .env.example       # Variables de entorno recomendadas
+└── README.md          # Documentación del proyecto
 ```
 
 ## 🛠️ Tecnologías
 
-- **Backend:** Python, FastAPI, SQLAlchemy.
-- **Base de Datos:** PostgreSQL (v15).
-- **Despliegue:** Docker & Docker Compose.
+- **Backend:** Python, FastAPI, SQLAlchemy, Pydantic.
+- **Base de Datos:** PostgreSQL.
+- **Frontend:** Next.js, TypeScript, Tailwind CSS.
+- **IA:** OpenAI GPT-4o con Structured Outputs.
 
 ## ⚙️ Requisitos Previos
 
-- [Docker](https://www.docker.com/get-started) y Docker Compose instalados.
-- Python 3.10+ (para desarrollo local).
+- Python 3.10+
+- Docker + Docker Compose (para PostgreSQL local)
+- Node.js y npm (para la interfaz frontend)
 
-## 🏃 Guía de Inicio Rápido
+## 📦 Configuración del Entorno
 
-### 1. Clonar el repositorio
+1. Copia el archivo de ejemplo:
+
+   ```bash
+   copy .env.example .env
+   ```
+
+2. Ajusta las credenciales en `.env`:
+   - `DATABASE_URL`
+   - `OPENAI_API_KEY`
+   - `NEXT_PUBLIC_API_BASE_URL`
+
+## 🧱 Levantar los servicios con Docker
+
 ```bash
-git clone <url-del-repositorio>
-cd MenuIA
+docker compose up -d
 ```
 
-### 2. Levantar los servicios con Docker
-Actualmente, puedes levantar la base de datos PostgreSQL configurada:
+Esto levantará:
+
+- PostgreSQL en el servicio `db`
+- Backend FastAPI en el servicio `backend`
+
+## 🥣 Poblar datos de ejemplo
 
 ```bash
-docker-compose up -d
+python -m backend.seed
 ```
 
-### 3. Configuración del Backend (Local)
-Si deseas ejecutar el backend localmente:
+## 🚀 Ejecutar el backend
 
-1. Crea un entorno virtual:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # En Windows: venv\Scripts\activate
-   ```
-2. Instala las dependencias (se recomienda crear un `requirements.txt`):
-   ```bash
-   pip install fastapi sqlalchemy psycopg2-binary uvicorn
-   ```
-3. Configura la variable de entorno `DATABASE_URL` o usa el valor por defecto en `database.py`.
+```bash
+python -m uvicorn backend.app:app --reload --host 0.0.0.0 --port 8000
+```
 
-## 📝 Licencia
+## 🌐 Ejecutar el frontend
 
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## 🔍 Endpoints disponibles
+
+- `GET /menu?weather={clima}&time={hora}`
+- `GET /admin/inventory`
+- `PATCH /admin/inventory/{id}`
+
+## 💡 Notas
+
+- Las credenciales deben guardarse en `.env`, que ya está excluido en `.gitignore`.
+- Si no hay clave de OpenAI configurada, el backend usa un ranking local de respaldo.
