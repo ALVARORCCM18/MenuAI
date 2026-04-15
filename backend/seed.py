@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 from backend.database import Base, engine, SessionLocal
-from backend.models import Product
+from backend.models import Product, Ingredient, Dish, DishIngredient
 
 load_dotenv()
 
@@ -146,30 +146,133 @@ MENU_PRODUCTS = [
 ]
 
 
+INGREDIENTS_V2 = [
+    {
+        "name": "Tomate fresco",
+        "description": "Tomate maduro para elaboraciones base y salsas.",
+        "price_per_unit": 0.85,
+        "category": "Produce",
+        "stock_level": 40,
+        "min_stock": 10,
+        "unit_type": "kg",
+        "tags": ["fresco", "vegetal"],
+    },
+    {
+        "name": "Queso manchego",
+        "description": "Queso curado para recetas calientes y frías.",
+        "price_per_unit": 1.9,
+        "category": "Dairy",
+        "stock_level": 15,
+        "min_stock": 4,
+        "unit_type": "kg",
+        "tags": ["lacteo", "premium"],
+    },
+    {
+        "name": "Pan brioche",
+        "description": "Pan suave para hamburguesas y sandwiches.",
+        "price_per_unit": 0.65,
+        "category": "Bakery",
+        "stock_level": 30,
+        "min_stock": 8,
+        "unit_type": "pieces",
+        "tags": ["pan", "suave"],
+    },
+    {
+        "name": "Carne de ternera",
+        "description": "Carne para hamburguesas premium.",
+        "price_per_unit": 3.5,
+        "category": "Meat",
+        "stock_level": 20,
+        "min_stock": 5,
+        "unit_type": "kg",
+        "tags": ["proteina", "premium"],
+    },
+]
+
+
+DISHES_V2 = [
+    {
+        "name": "Hamburguesa Premium",
+        "description": "Hamburguesa con pan brioche, queso manchego y carne de ternera.",
+        "price": 15.9,
+        "category": "Plato Principal",
+        "tags": ["gourmet", "caliente"],
+        "is_active": True,
+        "ingredients": [
+            {"ingredient_name": "Pan brioche", "quantity_needed": 2},
+            {"ingredient_name": "Queso manchego", "quantity_needed": 0.12},
+            {"ingredient_name": "Carne de ternera", "quantity_needed": 0.18},
+        ],
+    },
+    {
+        "name": "Tosta Mediterranea",
+        "description": "Tosta con tomate fresco y queso manchego.",
+        "price": 9.5,
+        "category": "Entrante",
+        "tags": ["fresco", "vegetariano"],
+        "is_active": True,
+        "ingredients": [
+            {"ingredient_name": "Pan brioche", "quantity_needed": 1},
+            {"ingredient_name": "Tomate fresco", "quantity_needed": 0.08},
+            {"ingredient_name": "Queso manchego", "quantity_needed": 0.05},
+        ],
+    },
+]
+
+
 def main() -> None:
     Base.metadata.create_all(bind=engine)
     session = SessionLocal()
 
     try:
-        existing = session.query(Product).count()
-        if existing:
-            print(f"La base de datos ya tiene {existing} productos. Se omitirá la recarga completa.")
-            return
+        existing_products = session.query(Product).count()
+        if not existing_products:
+            for item in MENU_PRODUCTS:
+                product = Product(
+                    name=item["name"],
+                    description=item["description"],
+                    price=item["price"],
+                    cost=item["cost"],
+                    stock_level=item["stock_level"],
+                    category=item["category"],
+                    tags=item["tags"],
+                )
+                session.add(product)
+        else:
+            print(f"La base de datos ya tiene {existing_products} productos legacy. Se mantendran.")
 
-        for item in MENU_PRODUCTS:
-            product = Product(
-                name=item["name"],
-                description=item["description"],
-                price=item["price"],
-                cost=item["cost"],
-                stock_level=item["stock_level"],
-                category=item["category"],
-                tags=item["tags"],
-            )
-            session.add(product)
+        existing_ingredients = {item.name: item for item in session.query(Ingredient).all()}
+        for item in INGREDIENTS_V2:
+            if item["name"] in existing_ingredients:
+                continue
+            ingredient = Ingredient(**item)
+            session.add(ingredient)
+            session.flush()
+            existing_ingredients[ingredient.name] = ingredient
+
+        existing_dishes = {item.name for item in session.query(Dish).all()}
+        for item in DISHES_V2:
+            if item["name"] in existing_dishes:
+                continue
+
+            dish_ingredients = item["ingredients"]
+            dish_data = {key: value for key, value in item.items() if key != "ingredients"}
+            dish = Dish(**dish_data)
+            session.add(dish)
+            session.flush()
+
+            for line in dish_ingredients:
+                ingredient = existing_ingredients[line["ingredient_name"]]
+                session.add(
+                    DishIngredient(
+                        dish_id=dish.id,
+                        ingredient_id=ingredient.id,
+                        quantity_needed=line["quantity_needed"],
+                    )
+                )
 
         session.commit()
-        print("Seed completado: 15 platos agregados a la base de datos.")
+        print("Seed completado: datos legacy y v2 agregados a la base de datos.")
     except SQLAlchemyError as error:
         session.rollback()
         raise

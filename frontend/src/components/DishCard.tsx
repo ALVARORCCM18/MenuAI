@@ -29,11 +29,11 @@ export function DishCard({ dish, rank }: DishCardProps) {
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Precio</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">€{dish.price.toFixed(2)}</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">€{Number(dish.price).toFixed(2)}</p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Margen</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">€{dish.margin.toFixed(2)}</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">€{Number(dish.margin).toFixed(2)}</p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Stock</p>

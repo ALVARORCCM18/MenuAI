@@ -1,15 +1,29 @@
 import os
+from decimal import Decimal
 from typing import List, Optional
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend import crud, models, openai_client
 from backend.database import Base, engine, get_db
-from backend.schemas import InventoryUpdate, MenuResponse, ProductResponse
+from backend.schemas import (
+    DishCreate,
+    DishIngredientResponse,
+    DishResponse,
+    DishSaleRequest,
+    DishSaleResponse,
+    IngredientCreate,
+    IngredientResponse,
+    IngredientStockUpdate,
+    InventoryUpdate,
+    MenuResponse,
+    ProductResponse,
+    StockTransactionResponse,
+)
 from backend import fallback_store
 
 
@@ -32,6 +46,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
+    auto_create_schema = os.getenv("AUTO_CREATE_SCHEMA", "false").lower() == "true"
+    if not auto_create_schema:
+        logger.info("AUTO_CREATE_SCHEMA=false: se omite create_all y se espera migracion Alembic.")
+        return
+
     try:
         Base.metadata.create_all(bind=engine)
     except SQLAlchemyError as exc:
@@ -117,3 +136,140 @@ def patch_inventory(
         if not updated:
             raise HTTPException(status_code=404, detail="Producto no encontrado.")
         return ProductResponse.model_validate(updated)
+
+
+def _build_dish_response(dish: models.Dish) -> DishResponse:
+    ingredients = [
+        DishIngredientResponse(
+            ingredient_id=link.ingredient_id,
+            ingredient_name=link.ingredient.name,
+            unit_type=link.ingredient.unit_type,
+            quantity_needed=Decimal(link.quantity_needed),
+            current_stock_level=Decimal(link.ingredient.stock_level),
+        )
+        for link in dish.ingredients
+    ]
+    cost = crud.compute_dish_cost(dish)
+    margin = Decimal(dish.price) - cost
+    return DishResponse(
+        id=dish.id,
+        name=dish.name,
+        description=dish.description,
+        price=Decimal(dish.price),
+        category=dish.category,
+        tags=dish.tags,
+        is_active=dish.is_active,
+        cost=cost,
+        margin=margin,
+        available_servings=crud.compute_dish_available_servings(dish),
+        ingredients=ingredients,
+    )
+
+
+@app.get("/v2/ingredients", response_model=List[IngredientResponse])
+def get_ingredients_v2(db: Session = Depends(get_db)) -> List[IngredientResponse]:
+    ingredients = crud.get_all_ingredients(db)
+    return [IngredientResponse.from_orm(item) for item in ingredients]
+
+
+@app.post("/v2/ingredients", response_model=IngredientResponse, status_code=status.HTTP_201_CREATED)
+def create_ingredient_v2(payload: IngredientCreate, db: Session = Depends(get_db)) -> IngredientResponse:
+    ingredient = crud.create_ingredient(db, payload.model_dump())
+    return IngredientResponse.from_orm(ingredient)
+
+
+@app.patch("/v2/ingredients/{ingredient_id}", response_model=IngredientResponse)
+def patch_ingredient_stock_v2(
+    ingredient_id: int,
+    payload: IngredientStockUpdate,
+    db: Session = Depends(get_db),
+) -> IngredientResponse:
+    existing = crud.get_ingredient_by_id(db, ingredient_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Ingrediente no encontrado.")
+
+    updated = crud.update_ingredient_stock(db, ingredient_id, payload.stock_level)
+    if not updated:
+        raise HTTPException(status_code=500, detail="No se pudo actualizar el stock del ingrediente.")
+    return IngredientResponse.from_orm(updated)
+
+
+@app.get("/v2/dishes", response_model=List[DishResponse])
+def get_dishes_v2(
+    include_inactive: bool = Query(False, description="Incluir platos inactivos"),
+    db: Session = Depends(get_db),
+) -> List[DishResponse]:
+    dishes = crud.get_all_dishes(db, active_only=not include_inactive)
+    return [_build_dish_response(dish) for dish in dishes]
+
+
+@app.post("/v2/dishes", response_model=DishResponse, status_code=status.HTTP_201_CREATED)
+def create_dish_v2(payload: DishCreate, db: Session = Depends(get_db)) -> DishResponse:
+    if not payload.ingredients:
+        raise HTTPException(status_code=400, detail="Un plato debe tener al menos un ingrediente.")
+
+    missing_ingredient_ids = [
+        item.ingredient_id
+        for item in payload.ingredients
+        if crud.get_ingredient_by_id(db, item.ingredient_id) is None
+    ]
+    if missing_ingredient_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ingredientes no encontrados: {missing_ingredient_ids}",
+        )
+
+    dish = crud.create_dish_with_ingredients(db, payload.model_dump())
+    return _build_dish_response(dish)
+
+
+@app.post("/v2/sales", response_model=DishSaleResponse)
+def sell_dish_v2(payload: DishSaleRequest, db: Session = Depends(get_db)) -> DishSaleResponse:
+    try:
+        dish, consumed = crud.sell_dish_atomic(
+            db,
+            dish_id=payload.dish_id,
+            quantity=payload.quantity,
+            created_by=payload.created_by,
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        db.rollback()
+        mapping = {
+            "DISH_NOT_FOUND": (404, "Plato no encontrado."),
+            "DISH_WITHOUT_INGREDIENTS": (400, "El plato no tiene ingredientes configurados."),
+            "INGREDIENT_NOT_FOUND": (400, "La receta contiene ingredientes inexistentes."),
+            "INSUFFICIENT_STOCK": (409, "Stock insuficiente para completar la venta."),
+        }
+        status_code, detail = mapping.get(str(exc), (400, "No se pudo completar la venta."))
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error de base de datos en la venta.") from exc
+
+    ingredients_consumed = [
+        DishIngredientResponse(
+            ingredient_id=link.ingredient_id,
+            ingredient_name=link.ingredient.name,
+            unit_type=link.ingredient.unit_type,
+            quantity_needed=Decimal(link.quantity_needed) * Decimal(payload.quantity),
+            current_stock_level=Decimal(link.ingredient.stock_level),
+        )
+        for link in consumed
+    ]
+    return DishSaleResponse(
+        dish_id=dish.id,
+        quantity_sold=payload.quantity,
+        ingredients_consumed=ingredients_consumed,
+        remaining_available_servings=crud.compute_dish_available_servings(dish),
+    )
+
+
+@app.get("/v2/stock-transactions", response_model=List[StockTransactionResponse])
+def get_stock_transactions_v2(
+    ingredient_id: Optional[int] = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> List[StockTransactionResponse]:
+    transactions = crud.get_recent_stock_transactions(db, ingredient_id=ingredient_id, limit=limit)
+    return [StockTransactionResponse.from_orm(item) for item in transactions]

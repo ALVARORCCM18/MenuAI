@@ -2,20 +2,25 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+This repository is maintained on the current `main` branch. Security fixes are applied to the active codebase and documented in the change history.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Security Guidelines
+
+- Keep secrets out of version control.
+- Store database credentials, OpenAI keys, and environment-specific values in `.env`.
+- Do not commit local overrides, dump files, or generated cache directories.
+- Validate all PATCH and POST payloads on the backend.
+- Prefer parameterized queries and ORM operations over raw SQL.
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+If you discover a security issue, report it privately to the project maintainer before opening a public issue.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Include:
+
+- A short description of the issue.
+- The affected route, component, or database area.
+- Steps to reproduce.
+- Any logs, screenshots, or request payloads that help confirm the problem.
+
+We will acknowledge the report, investigate it, and coordinate a fix before any public disclosure.

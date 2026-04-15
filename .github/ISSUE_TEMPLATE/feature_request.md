@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Sugiere una mejora del sistema de ingredientes, recetas, ventas o recomendación por IA
 title: ''
 labels: ''
 assignees: ''
@@ -8,13 +8,13 @@ assignees: ''
 ---
 
 **Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+Explain what limitation you want to remove in the current v2 flow.
 
 **Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+Describe the desired behavior in terms of ingredients, dishes, recipe editor, stock audit, or `/menu` ranking.
 
 **Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+Mention other UI or API approaches you evaluated.
 
 **Additional context**
-Add any other context or screenshots about the feature request here.
+Add any screenshots, API contracts, or examples that help clarify the request.
