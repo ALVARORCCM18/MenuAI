@@ -65,33 +65,79 @@ def get_menu(
     db: Session = Depends(get_db),
 ) -> MenuResponse:
     try:
-        products = crud.get_all_products(db)
-        if not products:
-            raise HTTPException(status_code=404, detail="No hay productos en el inventario.")
+        # Prefer v2 dishes as source of truth so admin changes affect the client menu.
+        dishes = crud.get_all_dishes(db, active_only=True)
+        if not dishes:
+            # Fallback to legacy products if no v2 dishes exist.
+            products = crud.get_all_products(db)
+            if not products:
+                raise HTTPException(status_code=404, detail="No hay productos en el inventario.")
 
-        product_dicts = [
-            {
-                "id": item.id,
-                "name": item.name,
-                "description": item.description,
-                "price": item.price,
-                "cost": item.cost,
-                "margin": item.margin,
-                "stock_level": item.stock_level,
-                "category": item.category,
-                "tags": item.tags,
+            product_dicts = [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "description": item.description,
+                    "price": item.price,
+                    "cost": item.cost,
+                    "margin": item.margin,
+                    "stock_level": item.stock_level,
+                    "category": item.category,
+                    "tags": item.tags,
+                }
+                for item in products
+            ]
+            ai_recommendation = openai_client.rank_menu(product_dicts, weather=weather, time_of_day=time)
+            ordered_products = crud.order_products_by_ids(products, ai_recommendation.recommended_ids)
+
+            return MenuResponse(
+                recommended_ids=ai_recommendation.recommended_ids,
+                ai_reasoning=ai_recommendation.ai_reasoning,
+                menu=[ProductResponse.from_orm(product) for product in ordered_products],
+            )
+
+        # Build product-like dicts from dishes so the ranking can consume the same schema.
+        dish_dicts = []
+        dish_map = {}
+        for d in dishes:
+            cost = crud.compute_dish_cost(d)
+            margin = float(Decimal(d.price) - cost)
+            available = crud.compute_dish_available_servings(d)
+            entry = {
+                "id": d.id,
+                "name": d.name,
+                "description": d.description or "",
+                "price": float(d.price),
+                "cost": float(cost),
+                "margin": float(margin),
+                "stock_level": int(available),
+                "category": d.category,
+                "tags": d.tags,
             }
-            for item in products
-        ]
-        ai_recommendation = openai_client.rank_menu(product_dicts, weather=weather, time_of_day=time)
-        ordered_products = crud.order_products_by_ids(products, ai_recommendation.recommended_ids)
+            dish_dicts.append(entry)
+            dish_map[d.id] = entry
+
+        ai_recommendation = openai_client.rank_menu(dish_dicts, weather=weather, time_of_day=time)
+
+        # Order dishes according to recommended ids, then by margin desc for remaining.
+        ordered: list[dict] = []
+        remaining = {d["id"]: d for d in dish_dicts}
+        for pid in ai_recommendation.recommended_ids:
+            item = remaining.pop(pid, None)
+            if item:
+                ordered.append(item)
+
+        if remaining:
+            rest_sorted = sorted(remaining.values(), key=lambda it: it.get("margin", 0), reverse=True)
+            ordered.extend(rest_sorted)
 
         return MenuResponse(
             recommended_ids=ai_recommendation.recommended_ids,
             ai_reasoning=ai_recommendation.ai_reasoning,
-            menu=[ProductResponse.from_orm(product) for product in ordered_products],
+            menu=[ProductResponse.model_validate(product) for product in ordered],
         )
     except SQLAlchemyError:
+        # Keep previous fallback behavior when DB errors occur.
         fallback_products = fallback_store.list_products()
         ai_recommendation = openai_client.rank_menu(fallback_products, weather=weather, time_of_day=time)
         priority = {item_id: idx for idx, item_id in enumerate(ai_recommendation.recommended_ids)}
